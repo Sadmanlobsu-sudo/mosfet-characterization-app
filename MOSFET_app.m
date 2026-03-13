@@ -1,4 +1,4 @@
-classdef final_mosfet_gui_exported_v67 < matlab.apps.AppBase
+classdef MOSFET_app_exported < matlab.apps.AppBase
 
     % Properties that correspond to app components
     properties (Access = public)
@@ -56,7 +56,7 @@ classdef final_mosfet_gui_exported_v67 < matlab.apps.AppBase
         VsubDSsubmaxEditFieldLabel     matlab.ui.control.Label
         VsubDSsubminEditField          matlab.ui.control.NumericEditField
         VsubDSsubminEditFieldLabel     matlab.ui.control.Label
-        WarmstartacrossVDSCheckBox     matlab.ui.control.CheckBox
+        WarmstartacrossDraintosourceVoltageCheckBox  matlab.ui.control.CheckBox
         DropDown                       matlab.ui.control.DropDown
         VsubGSsubSetEditorLabel        matlab.ui.control.Label
         VsubDSsubSweepLabel            matlab.ui.control.Label
@@ -271,7 +271,7 @@ classdef final_mosfet_gui_exported_v67 < matlab.apps.AppBase
             
             p.newton_fallback = app.NewtonfallbackifnotconvergedCheckBox.Value;
 
-            p.warm_start      = app.WarmstartacrossVDSCheckBox.Value;
+            p.warm_start      = app.WarmstartacrossDraintosourceVoltageCheckBox.Value;
             
             method = app.PrimaryMethodDropDown.Value;
             
@@ -491,6 +491,9 @@ classdef final_mosfet_gui_exported_v67 < matlab.apps.AppBase
             app.TextArea.Value = splitlines(summary_text);
             drawnow;
 
+            app.TextArea_2.Value = "Calculation finished.";
+            drawnow
+
             % re-enable after finish
             app.ResetButton.Enable = 'on';
             app.ExportButton.Enable = 'on';
@@ -498,6 +501,8 @@ classdef final_mosfet_gui_exported_v67 < matlab.apps.AppBase
             app.ExportOptionLabel.Enable = "on";
             
             app.StopButton.Text = 'Stop';
+
+            
 
         end
 
@@ -537,6 +542,7 @@ classdef final_mosfet_gui_exported_v67 < matlab.apps.AppBase
             else
                 app.ChannelLengthModulationVEditField.Enable = 'off';
                 app.ChannelLengthModulationVEditFieldLabel.Enable = 'off';
+                app.ChannelLengthModulationVEditField.Value = 0;
             end
 
         end
@@ -657,7 +663,7 @@ classdef final_mosfet_gui_exported_v67 < matlab.apps.AppBase
             app.ConvergenceTolerancetolEditField.Value = 1e-6;
         
             % Checkboxes
-            app.WarmstartacrossVDSCheckBox.Value = true;
+            app.WarmstartacrossDraintosourceVoltageCheckBox.Value = true;
             app.ShowregionBoundaryCheckBox.Value = true;
             app.ShowModeMapCheckBox.Value = true;
         
@@ -702,6 +708,9 @@ classdef final_mosfet_gui_exported_v67 < matlab.apps.AppBase
         % Button pushed function: ExportButton
         function ExportButtonPushed(app, event)
             
+            app.TextArea_2.Value = "Exporting data...";
+            drawnow
+            
             choice = app.ExportOptionDropDown.Value;
 
             [file,path] = uiputfile('*.*','Save Export');
@@ -721,7 +730,7 @@ classdef final_mosfet_gui_exported_v67 < matlab.apps.AppBase
             elseif tab == app.ModemapTab
                 ax = app.UIAxes_2;
             
-            elseif tab == app.IterationsTab
+            elseif tab == app.IterationsTab_2
                 ax = app.UIAxes_3;
             
             elseif tab == app.ConvergenceTab
@@ -741,16 +750,87 @@ classdef final_mosfet_gui_exported_v67 < matlab.apps.AppBase
                     save(filename + ".mat",'app')
             
                 case 'CSV'
-        
+                    
                     if isempty(app.results)
                         uialert(app.UIFigure,"No results available to export.","Export Error")
                         return
                     end
+                
+                    tab = app.TabGroup.SelectedTab;
+                
+                    % ===== OUTPUT CURVES TAB =====
+                    if tab == app.OutputCurvesTab
+
+                        Vds_min = app.VsubDSsubminEditField.Value;
+                        Vds_max = app.VsubDSsubmaxEditField.Value;
+                        dVds    = app.VsubDSsubEditField.Value;
                     
-                    writematrix(app.results.Id_results,'Id_results.csv')
-            
+                        Vds = Vds_min:dVds:Vds_max;
+                    
+                        Id = app.results.Id_results;
+                    
+                        % Rebuild Vgs set
+                        if strcmp(app.DropDown.Value,"Enter values")
+                            Vgs_set = str2num(app.VsubGSsubvaluesEditField.Value);
+                        else
+                            Vgs_min = app.VsubGSsubminEditField.Value;
+                            Vgs_max = app.VsubGSsubmaxEditField.Value;
+                            dVgs    = app.VsubGSsubEditField.Value;
+                            Vgs_set = Vgs_min:dVgs:Vgs_max;
+                        end
+                    
+                        names = compose("Vgs %.1f", Vgs_set);
+
+                        T = array2table(Id','VariableNames', matlab.lang.makeValidName(names));
+                        T.Properties.VariableNames = names;
+                    
+                        T = addvars(T, Vds', 'Before',1,'NewVariableNames','Vds');
+                    
+                        writetable(T, filename + "_output_curves.csv")
+                    
+                    
+                
+                    % ===== MODE MAP TAB =====
+                    elseif tab == app.ModemapTab
+                
+                        Vds = app.results.Vds_map;
+                        Vgs = app.results.Vgs_map;
+                        mode = app.results.mode_map;
+                
+                        [VDS,VGS] = meshgrid(Vds,Vgs);
+                
+                        T = table(VDS(:),VGS(:),mode(:), ...
+                            'VariableNames',{'Vds','Vgs','Region'});
+                
+                        writetable(T, filename + "_mode_map.csv")
+                
+                    % ===== ITERATION MAP TAB =====
+                    elseif tab == app.IterationsTab_2
+                
+                        iter = app.results.iter_map;
+                
+                        T = array2table(iter);
+                
+                        writetable(T, filename + "_iterations.csv")
+                
+                    % ===== CONVERGENCE TAB =====
+                    elseif tab == app.ConvergenceTab
+                
+                        [~, idx] = max(app.results.iter_map(:));
+                        [i,j] = ind2sub(size(app.results.iter_map), idx);
+                
+                        trace = app.results.trace_store{i,j};
+                
+                        iter = (1:length(trace))';
+                
+                        T = table(iter, trace', ...
+                            'VariableNames',{'Iteration','Error'});
+                
+                        writetable(T, filename + "_convergence.csv")
+
+                    end
             end
-            
+
             app.TextArea_2.Value = "Export completed.";
 
         end
@@ -766,6 +846,7 @@ classdef final_mosfet_gui_exported_v67 < matlab.apps.AppBase
             app.UIFigure = uifigure('Visible', 'off');
             app.UIFigure.Position = [100 100 1408 839];
             app.UIFigure.Name = 'MATLAB App';
+            app.UIFigure.Theme = 'light';
 
             % Create MOSFETCharacterizationandAnalysisToolPanel
             app.MOSFETCharacterizationandAnalysisToolPanel = uipanel(app.UIFigure);
@@ -900,7 +981,6 @@ classdef final_mosfet_gui_exported_v67 < matlab.apps.AppBase
             app.ChannelLengthModulationVEditField.Enable = 'off';
             app.ChannelLengthModulationVEditField.Layout.Row = [10 11];
             app.ChannelLengthModulationVEditField.Layout.Column = 5;
-            app.ChannelLengthModulationVEditField.Value = 0.2;
 
             % Create SolverControlsPanel
             app.SolverControlsPanel = uipanel(app.GridLayout9);
@@ -1043,7 +1123,7 @@ classdef final_mosfet_gui_exported_v67 < matlab.apps.AppBase
             % Create GridLayout15
             app.GridLayout15 = uigridlayout(app.SweepSettingsPanel);
             app.GridLayout15.ColumnWidth = {78, 50, 89, '1x'};
-            app.GridLayout15.RowHeight = {20, 40, 40, 40, 22, 22, 35, 35, 35, 35, 37};
+            app.GridLayout15.RowHeight = {20, 40, 40, 40, 22, 22, 35, 32, 32, 32, 40};
             app.GridLayout15.RowSpacing = 6.41666412353516;
             app.GridLayout15.Padding = [10 6.41666412353516 10 6.41666412353516];
 
@@ -1075,14 +1155,15 @@ classdef final_mosfet_gui_exported_v67 < matlab.apps.AppBase
             app.DropDown.Layout.Column = [1 4];
             app.DropDown.Value = 'Enter values';
 
-            % Create WarmstartacrossVDSCheckBox
-            app.WarmstartacrossVDSCheckBox = uicheckbox(app.GridLayout15);
-            app.WarmstartacrossVDSCheckBox.Text = '  Warm-start  across VDS';
-            app.WarmstartacrossVDSCheckBox.FontSize = 14;
-            app.WarmstartacrossVDSCheckBox.FontWeight = 'bold';
-            app.WarmstartacrossVDSCheckBox.Layout.Row = 11;
-            app.WarmstartacrossVDSCheckBox.Layout.Column = [1 3];
-            app.WarmstartacrossVDSCheckBox.Value = true;
+            % Create WarmstartacrossDraintosourceVoltageCheckBox
+            app.WarmstartacrossDraintosourceVoltageCheckBox = uicheckbox(app.GridLayout15);
+            app.WarmstartacrossDraintosourceVoltageCheckBox.Text = {'  Warm-start across Drain-to-source'; '  Voltage'};
+            app.WarmstartacrossDraintosourceVoltageCheckBox.WordWrap = 'on';
+            app.WarmstartacrossDraintosourceVoltageCheckBox.FontSize = 13;
+            app.WarmstartacrossDraintosourceVoltageCheckBox.FontWeight = 'bold';
+            app.WarmstartacrossDraintosourceVoltageCheckBox.Layout.Row = 11;
+            app.WarmstartacrossDraintosourceVoltageCheckBox.Layout.Column = [1 4];
+            app.WarmstartacrossDraintosourceVoltageCheckBox.Value = true;
 
             % Create VsubDSsubminEditFieldLabel
             app.VsubDSsubminEditFieldLabel = uilabel(app.GridLayout15);
@@ -1474,7 +1555,7 @@ classdef final_mosfet_gui_exported_v67 < matlab.apps.AppBase
     methods (Access = public)
 
         % Construct app
-        function app = final_mosfet_gui_exported_v67
+        function app = MOSFET_app_exported
 
             % Create UIFigure and components
             createComponents(app)
@@ -1494,5 +1575,4 @@ classdef final_mosfet_gui_exported_v67 < matlab.apps.AppBase
             delete(app.UIFigure)
         end
     end
-
 end
