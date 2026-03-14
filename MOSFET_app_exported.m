@@ -1,4 +1,4 @@
-classdef MOSFET_app < matlab.apps.AppBase
+classdef MOSFET_app_exported < matlab.apps.AppBase
 
     % Properties that correspond to app components
     properties (Access = public)
@@ -116,7 +116,7 @@ classdef MOSFET_app < matlab.apps.AppBase
                     'iter_map', [], ...
                     'trace_store', [] );
 
-                % PREALLOCATION 
+                % PREALLOCATION
                 Id_results = zeros(numel(Vgs_set), numel(Vds_sweep));
                 Vds_sat    = zeros(numel(Vgs_set),1);
                 Id_sat     = zeros(numel(Vgs_set),1);
@@ -1596,7 +1596,7 @@ classdef MOSFET_app < matlab.apps.AppBase
     methods (Access = public)
 
         % Construct app
-        function app = MOSFET_app
+        function app = MOSFET_app_exported
 
             % Create UIFigure and components
             createComponents(app)
